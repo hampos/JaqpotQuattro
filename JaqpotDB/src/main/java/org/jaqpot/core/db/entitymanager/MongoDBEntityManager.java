@@ -30,7 +30,9 @@
 package org.jaqpot.core.db.entitymanager;
 
 import com.mongodb.MongoClient;
+import com.mongodb.MongoClientOptions;
 import com.mongodb.MongoWriteException;
+import com.mongodb.ServerAddress;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Projections;
@@ -125,7 +127,13 @@ public class MongoDBEntityManager implements JaqpotEntityManager {
             LOG.log(Level.SEVERE, errorMessage, ex); // Log the event (but use the default properties)
         } finally {
             database = dbName;
-            mongoClient = new MongoClient(dbHost, dbPort); // Connect to the DB  
+            //MongoClientO
+            MongoClientOptions options = MongoClientOptions.builder()
+                    .heartbeatFrequency(5000)
+                    .maxConnectionIdleTime(10000)
+                    .socketKeepAlive(true)
+                    .build();
+            mongoClient = new MongoClient(new ServerAddress(dbHost, dbPort), options); // Connect to the DB  
             LOG.log(Level.INFO, "Database configured and connection established successfully!");
         }
 
@@ -233,7 +241,7 @@ public class MongoDBEntityManager implements JaqpotEntityManager {
                 .into(result);
         return result;
     }
-    
+
     @Override
     public <T extends JaqpotEntity> List<T> findSortedAsc(Class<T> entityClass, Map<String, Object> properties, Integer start, Integer max, List<String> ascendingFields) {
         MongoDatabase db = mongoClient.getDatabase(database);
@@ -258,7 +266,7 @@ public class MongoDBEntityManager implements JaqpotEntityManager {
                 .into(result);
         return result;
     }
-    
+
     @Override
     public <T extends JaqpotEntity> List<T> findSortedDesc(Class<T> entityClass, Map<String, Object> properties, Integer start, Integer max, List<String> descendingFields) {
         MongoDatabase db = mongoClient.getDatabase(database);
@@ -369,7 +377,7 @@ public class MongoDBEntityManager implements JaqpotEntityManager {
                 .into(result);
         return result;
     }
-    
+
     @Override
     public <T extends JaqpotEntity> List<T> findSortedAsc(Class<T> entityClass, Map<String, Object> properties, List<String> fields, Integer start, Integer max, List<String> ascendingFields) {
         MongoDatabase db = mongoClient.getDatabase(database);
@@ -397,7 +405,7 @@ public class MongoDBEntityManager implements JaqpotEntityManager {
                 .into(result);
         return result;
     }
-    
+
     @Override
     public <T extends JaqpotEntity> List<T> findSortedDesc(Class<T> entityClass, Map<String, Object> properties, List<String> fields, Integer start, Integer max, List<String> descendingFields) {
         MongoDatabase db = mongoClient.getDatabase(database);
