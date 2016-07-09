@@ -129,8 +129,7 @@ public class MongoDBEntityManager implements JaqpotEntityManager {
             database = dbName;
             //MongoClientO
             MongoClientOptions options = MongoClientOptions.builder()
-                    .heartbeatFrequency(5000)
-                    .maxConnectionIdleTime(10000)
+                    .maxConnectionIdleTime(500000)
                     .socketKeepAlive(true)
                     .build();
             mongoClient = new MongoClient(new ServerAddress(dbHost, dbPort), options); // Connect to the DB  
