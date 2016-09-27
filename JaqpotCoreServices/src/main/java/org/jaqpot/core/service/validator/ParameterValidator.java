@@ -5,6 +5,7 @@
  */
 package org.jaqpot.core.service.validator;
 
+import com.fasterxml.jackson.databind.deser.std.NumberDeserializers;
 import org.apache.commons.lang3.StringUtils;
 import org.jaqpot.core.data.serialize.JSONSerializer;
 import org.jaqpot.core.model.Parameter;
@@ -27,8 +28,10 @@ public class ParameterValidator {
     public enum Type {
         NUMERIC,
         STRING,
+        INTEGER,
         NUMERIC_ARRAY,
         STRING_ARRAY,
+        INTEGER_ARRAY,
         UNDEFINED
     }
 
@@ -77,7 +80,9 @@ public class ParameterValidator {
 
             //Get type of algorithm's parameter
             Type typeOfParameter = Type.UNDEFINED;
-            if (isNumeric(parameter.getValue().toString()))
+            if(isInteger(parameter.getValue().toString()))
+                typeOfParameter = Type.INTEGER;
+            else if (isNumeric(parameter.getValue().toString()))
                 typeOfParameter = Type.NUMERIC;
             else if (StringUtils.isAlphanumericSpace(parameter.getValue().toString()))
                 typeOfParameter = Type.STRING;
@@ -89,6 +94,18 @@ public class ParameterValidator {
 
             //Get type of user's value and validate
             switch (typeOfParameter) {
+                case INTEGER:
+                    if (isInteger(value.toString())) {
+                        if (parameter.getAllowedValues()!=null)
+                            checkAllowedValues(parameterId,Integer.parseInt(value.toString()), (List<Integer>) (List<?>) parameter.getAllowedValues());
+                        if (parameter.getMinValue()!=null && isInteger(parameter.getMinValue().toString()))
+                            checkIsLessThan(parameterId,Integer.parseInt(value.toString()), (Integer.parseInt(parameter.getMinValue().toString())));
+                        if (parameter.getMaxValue()!=null && isInteger(parameter.getMaxValue().toString()))
+                            checkIsGreaterThan(parameterId,Integer.parseInt(value.toString()), (Integer.parseInt(parameter.getMaxValue().toString())));
+                    }
+                    else
+                        throw new ParameterTypeException("Parameter with id:" + parameterId + " must be a whole number");
+                    break;
                 case NUMERIC:
                     if (isNumeric(value.toString())) {
                         if (parameter.getAllowedValues()!=null)
@@ -114,6 +131,20 @@ public class ParameterValidator {
                     }
                     else
                         throw new ParameterTypeException("Parameter with id: '" + parameterId + "' must be Alphanumeric");
+                    break;
+                case INTEGER_ARRAY:
+                    if ((value instanceof Collection && getTypeOfCollection((Collection) value) == Type.INTEGER_ARRAY)) {
+                        checkAllowedValues(parameterId,value, parameter.getAllowedValues());
+                        checkMinMaxSize(parameterId,(Collection) value, parameter.getMinArraySize(), parameter.getMaxArraySize());
+                        for (Object o : (Collection) value) {
+                            if (parameter.getMinValue()!=null && isInteger(parameter.getMinValue().toString()))
+                                checkIsLessThan(parameterId,Integer.parseInt(o.toString()), (Integer.parseInt(parameter.getMinValue().toString())));
+                            if (parameter.getMaxValue()!=null && isInteger(parameter.getMaxValue().toString()))
+                                checkIsGreaterThan(parameterId,Integer.parseInt(o.toString()), (Integer.parseInt(parameter.getMaxValue().toString())));
+                        }
+                    }
+                    else
+                        throw new ParameterTypeException("Parameter with id: '" + parameterId + "' must be Array of integer values");
                     break;
                 case NUMERIC_ARRAY:
                     if ((value instanceof Collection && getTypeOfCollection((Collection) value) == Type.NUMERIC_ARRAY)) {
@@ -149,7 +180,7 @@ public class ParameterValidator {
         }
     }
 
-    static <T> boolean  checkAllowedValues(String parameterId, T value, List<T> elements) throws ParameterRangeException {
+    private static <T> boolean  checkAllowedValues(String parameterId, T value, List<T> elements) throws ParameterRangeException {
         if (value!=null)
             if (elements!=null) {
                 for (T o : elements) {
@@ -161,21 +192,21 @@ public class ParameterValidator {
         return true;
     }
 
-    static <T extends Comparable<? super T>> Boolean  checkIsLessThan (String parameterId, T value, T minimum) throws ParameterRangeException {
+    private static <T extends Comparable<? super T>> Boolean  checkIsLessThan(String parameterId, T value, T minimum) throws ParameterRangeException {
         if (minimum != null && isNumeric(minimum.toString()))
             if (value.compareTo(minimum)<0)
                 throw new ParameterRangeException("Parameter with id: '" + parameterId + "' has a value less than the parameter's allowed minimum");
         return true;
     }
 
-    static <T extends Comparable<? super T>> Boolean  checkIsGreaterThan (String parameterId, T value, T maximum) throws ParameterRangeException {
+    private static <T extends Comparable<? super T>> Boolean  checkIsGreaterThan(String parameterId, T value, T maximum) throws ParameterRangeException {
         if (maximum != null)
             if (value.compareTo(maximum)>0)
                 throw new ParameterRangeException("Parameter with id: '" + parameterId + "' has a value greater than the parameter's allowed maximum");
         return true;
     }
 
-    static Boolean checkMinMaxSize(String parameterId, Collection collection, Integer minSize, Integer maxSize) throws ParameterRangeException {
+    private static Boolean checkMinMaxSize(String parameterId, Collection collection, Integer minSize, Integer maxSize) throws ParameterRangeException {
         if (minSize!=null && isNumeric(minSize.toString()))
             if (collection.size()<minSize)
                 throw new ParameterRangeException("Parameter with id: '" + parameterId + "' has an array size lees than the parameter's allowed minimum array size");
@@ -187,31 +218,23 @@ public class ParameterValidator {
 
     //Returns if array is a (consistent) collection of Strings (Type.STRING) or Numbers (Type.NUMERIC).
     //else returns Type.UNDEFINED
-    static Type getTypeOfCollection(Collection collection)
-    {
+    private static Type getTypeOfCollection(Collection collection) {
         Type content = null;
-        for (Object value:collection)
-        {
-            if(!isNumeric(value.toString()))
-                if (!StringUtils.isAlphanumericSpace(value.toString()))
-                    return Type.UNDEFINED;
-                else
-                    if (content == Type.NUMERIC_ARRAY)
-                        return Type.UNDEFINED;
-                    else
-                        content=Type.STRING_ARRAY;
-            else
-                if (content == Type.STRING_ARRAY)
-                    return Type.UNDEFINED;
-            else
-                    content=Type.NUMERIC_ARRAY;
+        for (Object value : collection) {
+            if (isInteger(value.toString()) && (content == Type.INTEGER_ARRAY || content == null))
+                content = Type.INTEGER_ARRAY;
+            else if (isNumeric(value.toString()) && (content == Type.NUMERIC_ARRAY || content == Type.INTEGER_ARRAY || content == null))
+                content = Type.NUMERIC_ARRAY;
+            else if (StringUtils.isAlphanumericSpace(value.toString()) && (content == Type.STRING_ARRAY || content == null))
+                content = Type.STRING_ARRAY;
+            else return Type.UNDEFINED;
         }
         return content;
     }
 
     //Probably most performant solution to check for isNumeric, according to discussion here
     //http://stackoverflow.com/questions/1102891/how-to-check-if-a-string-is-numeric-in-java/1102916#1102916
-    static boolean isNumeric(String str)
+    private static boolean isNumeric(String str)
     {
         try
         {
@@ -221,6 +244,14 @@ public class ParameterValidator {
         {
             return false;
         }
+        return true;
+    }
+
+    private static boolean isInteger(String str)
+    {
+        if (isNumeric(str))
+            if (str.contains("."))
+                return false;
         return true;
     }
 }
